@@ -29,17 +29,17 @@ configuring the time of live (TTL) are not yet supported by this interface.
 
 =cut
 
-use 5.008007;
+use 5.006;
 
 use strict;
 use warnings;
 
 use Carp (qw(cluck confess));
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
 require XSLoader;
-XSLoader::load('Net::Oping', $VERSION);
+XSLoader::load ('Net::Oping', $VERSION);
 return (1);
 
 =head1 INTERFACE
@@ -248,6 +248,15 @@ sub get_error
 }
 
 =back
+
+=head1 CAVEATS
+
+The C<oping> library opens a raw socket to be able to send ICMP packets. On
+most systems normal users are not allowed to do this. This is why on most
+systems the L<ping(1)> utility is installed as SetUID-root. Since, when using
+this module, no external process is spawned B<this> process needs the
+appropriate permissions. This means that either your script has to run as
+superuser or, under Linux, needs the C<CAP_NET_RAW> capability.
 
 =head1 SEE ALSO
 
