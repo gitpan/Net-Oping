@@ -1,3 +1,27 @@
+#
+# Net-Oping - lib/Net/Oping.pm
+# Copyright (C) 2007       Olivier Fredj
+# Copyright (C) 2008,2009  Florian octo Forster
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; only version 2 of the License is
+# applicable.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+#
+# Authors:
+#   Olivier Fredj <ofredj at proxad.net>
+#   Florian octo Forster <octo at verplant.org>
+#
+
 package Net::Oping;
 
 =head1 NAME
@@ -17,15 +41,16 @@ Net::Oping - ICMP latency measurement module using the oping library.
 =head1 DESCRIPTION
 
 This Perl module is a high-level interface to the
-L<oping library|http://verplant.org/liboping/>. Its purpose it to send C<ICMP
-ECHO_REQUEST> packets (also known as "ping") to a host and measure the time
-that elapses until the reception of an C<ICMP ECHO_REPLY> packet (also known as
-"pong"). If no such packet is received after a certain timeout the host is considered to be unreachable.
+L<oping library|http://verplant.org/liboping/>. Its purpose it to send
+C<ICMP ECHO_REQUEST> packets (also known as "ping") to a host and measure the
+time that elapses until the reception of an C<ICMP ECHO_REPLY> packet (also
+known as "pong"). If no such packet is received after a certain timeout the
+host is considered to be unreachable.
 
-The used C<oping> library supports "ping"ing multiple hosts in parallel and
+The used I<oping> library supports "ping"ing multiple hosts in parallel and
 works with IPv4 and IPv6 transparently. Other advanced features that are
-provided by the underlying library, such as setting the data sent or
-configuring the time of live (TTL) are not yet supported by this interface.
+provided by the underlying library, such as setting the data sent, are not yet
+supported by this interface.
 
 =cut
 
@@ -36,7 +61,7 @@ use warnings;
 
 use Carp (qw(cluck confess));
 
-our $VERSION = '1.02';
+our $VERSION = '1.10';
 
 require XSLoader;
 XSLoader::load ('Net::Oping', $VERSION);
@@ -46,14 +71,14 @@ return (1);
 
 The interface is kept simple and clean. First you need to create an object to
 which you then add hosts. Using the C<ping> method you can request a latency
-measurement and get the current values returned. If neccessary you can remove
+measurement and get the current values returned. If necessary you can remove
 hosts from the object, too.
 
 The constructor and methods are defined as follows:
 
 =over 4
 
-=item my I<$obj> = Net::Oping-E<gt>B<new> ();
+=item I<$obj> = Net::Oping-E<gt>B<new> ();
 
 Creates and returns a new object.
 
@@ -74,7 +99,7 @@ sub DESTROY
   _ping_destroy ($obj->{'c_obj'});
 }
 
-=item my I<$status> = I<$obj>-E<gt>B<timeout> (I<$timeout>);
+=item I<$status> = I<$obj>-E<gt>B<timeout> (I<$timeout>);
 
 Sets the timeout before a host is considered unreachable to I<$timeout>
 seconds, which may be a floating point number to specify fractional seconds.
@@ -97,11 +122,35 @@ sub timeout
   return (1);
 }
 
-=item my I<$status> = I<$obj>-E<gt>B<bind> (I<$ip_addr>);
+=item I<$status> = I<$obj>-E<gt>B<ttl> (I<$ttl>);
+
+Sets the I<Time to Live> (TTL) of outgoing packets. I<$ttl> must be in the
+range B<1>E<nbsp>...E<nbsp>B<255>. Returns true when successful and false
+when an error occurred.
+
+=cut
+
+sub ttl
+{
+  my $obj = shift;
+  my $ttl = shift;
+  my $status;
+
+  $status = _ping_setopt_ttl ($obj->{'c_obj'}, $ttl);
+  if ($status != 0)
+  {
+    $obj->{'err_msg'} = "" . _ping_get_error ($obj->{'c_obj'});
+    return;
+  }
+
+  return (1);
+}
+
+=item I<$status> = I<$obj>-E<gt>B<bind> (I<$ip_addr>);
 
 Sets the source IP-address to use. I<$ip_addr> must be a string containing an
 IP-address, such as "192.168.0.1" or "2001:f00::1". As a side-effect this will
-set the address-family (IPv4 or IPv6) to a fixed, value, too, for obvious
+set the address-family (IPv4 or IPv6) to a fixed value, too, for obvious
 reasons.
 
 =cut
@@ -122,7 +171,7 @@ sub bind
   return (1);
 }
 
-=item my I<$status> = I<$obj>-E<gt>B<host_add> (I<$host>, [I<$host>, ...]);
+=item I<$status> = I<$obj>-E<gt>B<host_add> (I<$host>, [I<$host>, ...]);
 
 Adds one or more hosts to the Net::Oping-object I<$obj>. The number of
 successfully added hosts is returned. If this number differs from the number of
@@ -153,7 +202,7 @@ sub host_add
   return ($i);
 }
 
-=item my I<$status> = I<$obj>-E<gt>B<host_remove> (I<$host>, [I<$host>, ...]);
+=item I<$status> = I<$obj>-E<gt>B<host_remove> (I<$host>, [I<$host>, ...]);
 
 Same semantic as B<host_add> but removes hosts.
 
@@ -180,7 +229,7 @@ sub host_remove
   return ($i);
 }
 
-=item my I<$latency> = I<$obj>-E<gt>B<ping> ()
+=item I<$latency> = I<$obj>-E<gt>B<ping> ()
 
 The central method of this module sends ICMP packets to the hosts and waits for
 replies. The time it takes for replies to arrive is measured and returned.
@@ -206,12 +255,17 @@ sub ping
   $status = _ping_send ($obj->{'c_obj'});
   if ($status < 0)
   {
-    print "\$status = $status;\n";
     $obj->{'err_msg'} = "" . _ping_get_error ($obj->{'c_obj'});
     return;
   }
 
   $iter = _ping_iterator_get ($obj->{'c_obj'});
+  if (!$iter)
+  {
+    $obj->{'err_msg'} = "" . _ping_get_error ($obj->{'c_obj'});
+    return;
+  }
+
   while ($iter)
   {
     my $host = _ping_iterator_get_hostname ($iter);
@@ -233,11 +287,98 @@ sub ping
   }
 
   return ($data);
-}
+} # ping
 
-=item my I<$errmsg> = I<$obj>-E<gt>B<get_error> ();
+=item I<$dropped> = I<$obj>-E<gt>B<get_dropped> ()
 
-Returns the last error that occured.
+Returns a hash reference holding the number of "drops" (echo requests which
+were not answered in time) for each host. An example return
+values would be:
+
+  $droprate = { host1 => 0, host2 => 3, host3 => undef, ... };
+
+Hosts to which no data has been sent yet will return C<undef> ("host3" in thie
+example).
+
+=cut
+
+sub get_dropped
+{
+  my $obj = shift;
+  my $iter;
+  my $data = {};
+
+  $iter = _ping_iterator_get ($obj->{'c_obj'});
+  if (!$iter)
+  {
+    $obj->{'err_msg'} = "" . _ping_get_error ($obj->{'c_obj'});
+    return;
+  }
+
+  while ($iter)
+  {
+    my $host = _ping_iterator_get_hostname ($iter);
+    if (!$host)
+    {
+      $iter = _ping_iterator_next ($iter);
+      next;
+    }
+
+    my $dropped = _ping_iterator_get_dropped ($iter);
+    if ($dropped < 0)
+    {
+      $dropped = undef;
+    }
+
+    $data->{$host} = $dropped;
+
+    $iter = _ping_iterator_next ($iter);
+  }
+
+  return ($data);
+} # get_dropped
+
+=item I<$ttl> = I<$obj>-E<gt>B<get_recv_ttl> ()
+
+Returns a hash reference holding the I<Time to Live> (TTL) of the last received
+packet for each host. An example return value would be:
+
+  $ttl = { host1 => 60, host2 => 41, host3 => 243, ... };
+
+To signal an invalid or unavailable TTL, a negative number is returned.
+
+=cut
+
+sub get_recv_ttl
+{
+  my $obj = shift;
+  my $iter;
+  my $data = {};
+
+  $iter = _ping_iterator_get ($obj->{'c_obj'});
+  if (!$iter)
+  {
+    $obj->{'err_msg'} = "" . _ping_get_error ($obj->{'c_obj'});
+    return;
+  }
+
+  while ($iter)
+  {
+    my $host = _ping_iterator_get_hostname ($iter);
+    if ($host)
+    {
+      $data->{$host} = _ping_iterator_get_recv_ttl ($iter);
+    }
+
+    $iter = _ping_iterator_next ($iter);
+  }
+
+  return ($data);
+} # get_recv_ttl
+
+=item I<$errmsg> = I<$obj>-E<gt>B<get_error> ();
+
+Returns the last error that occurred.
 
 =cut
 
@@ -251,7 +392,7 @@ sub get_error
 
 =head1 CAVEATS
 
-The C<oping> library opens a raw socket to be able to send ICMP packets. On
+The I<oping> library opens a raw socket to be able to send ICMP packets. On
 most systems normal users are not allowed to do this. This is why on most
 systems the L<ping(1)> utility is installed as SetUID-root. Since, when using
 this module, no external process is spawned B<this> process needs the
@@ -262,7 +403,7 @@ superuser or, under Linux, needs the C<CAP_NET_RAW> capability.
 
 L<liboping(3)>
 
-The C<liboping> homepage may be found at L<http://verplant.org/liboping/>.
+The I<liboping> homepage may be found at L<http://verplant.org/liboping/>.
 Information about its mailing list may be found at
 L<http://mailman.verplant.org/listinfo/liboping>.
 
@@ -275,12 +416,17 @@ Perl interface by Florian Forster.
 
 Copyright (C) 2007 by Olivier Fredj E<lt>ofredjE<nbsp>atE<nbsp>proxad.netE<gt>
 
-Copyright (C) 2008 by Florian Forster
+Copyright (C) 2008,2009 by Florian Forster
 E<lt>octoE<nbsp>atE<nbsp>verplant.orgE<gt>
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.7 or,
 at your option, any later version of Perl 5 you may have available.
+
+Please note that I<liboping> is licensed under the GPLv2. Derived works of
+both, I<Net::Oping> and I<liboping>, (i.E<nbsp>e. binary packages) may
+therefore be subject to stricter licensing terms than the source code of this
+package.
 
 =cut
 

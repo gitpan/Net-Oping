@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Net-Oping
-version:             1.02
+version:             1.10
 abstract:            ICMP latency measurement module using the oping library.
 license:             ~
 author:              

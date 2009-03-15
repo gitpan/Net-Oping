@@ -1,3 +1,26 @@
+/**
+ * Net-Oping - Oping.xs
+ * Copyright (C) 2007       Olivier Fredj
+ * Copyright (C) 2008,2009  Florian octo Forster
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; only version 2 of the License is
+ * applicable.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+ *
+ * Authors:
+ *   Olivier Fredj <ofredj at proxad.net>
+ *   Florian octo Forster <octo at verplant.org>
+ */
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
@@ -5,6 +28,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
+#include <inttypes.h>
 #include <errno.h>
 #include <assert.h>
 #include <netdb.h> /* NI_MAXHOST */
@@ -33,6 +58,15 @@ _ping_setopt_timeout (obj, timeout)
 	double timeout
 	CODE:
 		RETVAL = ping_setopt (obj, PING_OPT_TIMEOUT, &timeout);
+	OUTPUT:
+		RETVAL
+
+int
+_ping_setopt_ttl (obj, ttl)
+	pingobj_t *obj
+	int ttl
+	CODE:
+		RETVAL = ping_setopt (obj, PING_OPT_TTL, &ttl);
 	OUTPUT:
 		RETVAL
 
@@ -120,9 +154,10 @@ _ping_iterator_get_hostname (iter)
 				(void *) buffer, &buffer_size);
 		if (status != ENOMEM)
 			break;
-
-		/* FIXME: This is a workaround for a bug in 0.3.5. */
+#if !defined(OPING_VERSION) || (OPING_VERSION <= 3005)
+		/* This is a workaround for a bug in 0.3.5. */
 		buffer_size++;
+#endif
 
 		buffer = (char *) malloc (buffer_size);
 		if (buffer == NULL)
@@ -131,11 +166,58 @@ _ping_iterator_get_hostname (iter)
 		status = ping_iterator_get_info (iter, PING_INFO_HOSTNAME,
 				(void *) buffer, &buffer_size);
 		if (status != 0)
+		{
+			free (buffer);
 			break;
+		}
 
 		XPUSHs (sv_2mortal (newSVpvn(buffer,buffer_size)));
 		free(buffer);
 	} while (0);
+
+int
+_ping_iterator_get_dropped (iter)
+	pingobj_iter_t *iter
+	CODE:
+#if defined(PING_INFO_DROPPED)
+		uint32_t tmp;
+		size_t tmp_size;
+		int status;
+
+		RETVAL = -1;
+
+		tmp_size = sizeof (tmp);
+		status = ping_iterator_get_info (iter, PING_INFO_DROPPED,
+			(void *) &tmp, &tmp_size);
+		if (status == 0)
+			RETVAL = (int) tmp;
+#else
+		RETVAL = -1;
+#endif
+	OUTPUT:
+		RETVAL
+
+int
+_ping_iterator_get_recv_ttl (iter)
+	pingobj_iter_t *iter
+	CODE:
+#if defined(PING_INFO_RECV_TTL)
+		int tmp;
+		size_t tmp_size;
+		int status;
+
+		RETVAL = -1;
+
+		tmp_size = sizeof (tmp);
+		status = ping_iterator_get_info (iter, PING_INFO_RECV_TTL,
+			(void *) &tmp, &tmp_size);
+		if (status == 0)
+			RETVAL = tmp;
+#else
+		RETVAL = -1;
+#endif
+	OUTPUT:
+		RETVAL
 
 const char *
 _ping_get_error (obj)
