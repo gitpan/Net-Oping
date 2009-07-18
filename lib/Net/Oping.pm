@@ -30,7 +30,7 @@ Net::Oping - ICMP latency measurement module using the oping library.
 
 =head1 SYNOPSIS
 
-  use Net::Oping;
+  use Net::Oping ();
 
   my $obj = Net::Oping->new ();
   $obj->host_add (qw(one.example.org two.example.org));
@@ -61,7 +61,7 @@ use warnings;
 
 use Carp (qw(cluck confess));
 
-our $VERSION = '1.10';
+our $VERSION = '1.20';
 
 require XSLoader;
 XSLoader::load ('Net::Oping', $VERSION);
@@ -163,6 +163,35 @@ sub bind
 
   $status = _ping_setopt_source ($obj->{'c_obj'}, $addr);
   if ($status != 0)
+  {
+    $obj->{'err_msg'} = "" . _ping_get_error ($obj->{'c_obj'});
+    return;
+  }
+
+  return (1);
+}
+
+=item I<$status> = I<$obj>-E<gt>B<device> (I<$device>);
+
+Sets the network device used for communication. This may not be supported on
+all platforms.
+
+I<Requires liboping 1.3 or later.>
+
+=cut
+
+sub device
+{
+  my $obj = shift;
+  my $device = shift;
+  my $status;
+
+  $status = _ping_setopt_device ($obj->{'c_obj'}, $device);
+  if ($status == -95) # Feature not supported.
+  {
+    $obj->{'err_msg'} = "Feature not supported by your version of liboping.";
+  }
+  elsif ($status != 0)
   {
     $obj->{'err_msg'} = "" . _ping_get_error ($obj->{'c_obj'});
     return;
@@ -407,7 +436,7 @@ The I<liboping> homepage may be found at L<http://verplant.org/liboping/>.
 Information about its mailing list may be found at
 L<http://mailman.verplant.org/listinfo/liboping>.
 
-=head1 AUTHOR
+=head1 AUTHORS
 
 First XSE<nbsp>port by Olivier Fredj, extended XS functionality and high-level
 Perl interface by Florian Forster.
